@@ -21,7 +21,7 @@ env:
 
 jobs:
   macos:
-    runs-on: macos-15
+    runs-on: macos-14
     env:
       MACOSX_DEPLOYMENT_TARGET: '12.0'
     steps:
