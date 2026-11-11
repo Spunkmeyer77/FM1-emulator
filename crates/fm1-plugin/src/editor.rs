@@ -7,7 +7,7 @@ use crate::engine::Cmd;
 use crate::{panel, panel_smk, skin, Clock, Fm1Params, Lead, Link};
 use fm1_soc::Board;
 use nih_plug::prelude::*;
-use nih_plug_egui::{create_egui_editor, egui, widgets};
+use nih_plug_egui::{create_egui_editor, egui, resizable_window::ResizableWindow, widgets};
 use std::sync::Arc;
 
 /// A pointer's grab: what it hit (fm1-web's panel_hit codes), where it was, what it holds.
@@ -91,7 +91,10 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
         let smk = board == Board::Smk37;
         let (w, h) = if smk { (panel_smk::W, panel_smk::H) } else { (skin::W, skin::H) };
 
-        egui::TopBottomPanel::top("bar").show(ctx, |bar| {
+        // the whole window can be resized from its corner (the size is kept with the project)
+        let editor_state = params.editor_state.clone();
+        ResizableWindow::new("fm1-resize").min_size(egui::Vec2::new(640.0, 470.0)).show(ctx, &editor_state, |rw| {
+        egui::TopBottomPanel::top("bar").show_inside(rw, |bar| {
             bar.horizontal_wrapped(|bar| {
                 if ui.msg_until.is_some_and(|until| std::time::Instant::now() >= until) {
                     ui.msg.clear(); ui.msg_until = None;
@@ -149,11 +152,7 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                 });
             });
         });
-        if ui.about {
-            about_window(ctx, &mut ui.about);
-        }
-
-        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(egui::Color32::from_rgb(0x18, 0x19, 0x1b))).show(ctx, |c| {
+        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(egui::Color32::from_rgb(0x18, 0x19, 0x1b))).show_inside(rw, |c| {
             let avail = c.available_rect_before_wrap();
             let k = (avail.width() / w as f32).min(avail.height() / h as f32);
             let rect = egui::Rect::from_center_size(avail.center(), egui::vec2(w as f32 * k, h as f32 * k));
@@ -301,6 +300,10 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                 *t = t.saturating_sub(1);
             }
         });
+        });
+        if ui.about {
+            about_window(ctx, &mut ui.about);
+        }
         ctx.request_repaint_after(std::time::Duration::from_millis(33));
     })
 }
