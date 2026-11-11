@@ -13,7 +13,8 @@ fm1-core = { path = "../fm1-core" }
 fm1-soc = { path = "../fm1-soc" }
 # no default features: they bring nih-plug's VST3 bindings (GPL); VST3 comes from clap-wrapper
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "de421011f41a6d10fc8c7a6084e4f4dee0143683", default-features = false }
-nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "de421011f41a6d10fc8c7a6084e4f4dee0143683" }
+# vendored with a fix for resizing on Retina screens (see vendor/nih_plug_egui/src/editor.rs)
+nih_plug_egui = { path = "vendor/nih_plug_egui" }
 rtrb = "0.3"
 rfd = "0.15"
 base64 = "0.22"
