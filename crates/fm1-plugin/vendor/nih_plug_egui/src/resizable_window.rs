@@ -12,7 +12,7 @@ pub struct ResizableWindow {
     id: Id,
     min_size: Vec2,
     max_size: Option<Vec2>,
-    aspect: Option<f32>,
+    aspect: Option<(f32, f32)>,
 }
 
 impl ResizableWindow {
@@ -33,10 +33,11 @@ impl ResizableWindow {
         self
     }
 
-    /// Keep width / height at this ratio while dragging (FM-1 emulator)
+    /// Keep the window's shape while dragging (FM-1 emulator): height = width / `ratio` + `extra`
+    /// (content of that ratio under a bar `extra` high)
     #[inline]
-    pub fn keep_aspect(mut self, ratio: f32) -> Self {
-        self.aspect = Some(ratio);
+    pub fn keep_aspect(mut self, ratio: f32, extra: f32) -> Self {
+        self.aspect = Some((ratio, extra));
         self
     }
 
@@ -71,10 +72,10 @@ impl ResizableWindow {
                 if let Some(max) = self.max_size {
                     desired_size = desired_size.min(max);
                 }
-                if let Some(r) = self.aspect {
+                if let Some((r, extra)) = self.aspect {
                     // the width follows the pointer, or the height, whichever asks for less
-                    let w = desired_size.x.min(desired_size.y * r);
-                    desired_size = Vec2::new(w, w / r).max(self.min_size);
+                    let w = desired_size.x.min((desired_size.y - extra) * r).max(self.min_size.x);
+                    desired_size = Vec2::new(w, w / r + extra);
                 }
 
                 if corner_response.dragged() {

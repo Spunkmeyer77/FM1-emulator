@@ -2,6 +2,7 @@
 
 - Size menu in the top bar: 75%, 100%, 125%, 150%.
 - Dragging the corner keeps the window's proportions and stops at a maximum size, so the corner can no longer end up off screen.
+- No more dark gap above the panel when resizing: the window takes the panel's exact shape and the panel sits under the top bar.
 
 Downloads: macOS `.pkg` (Apple silicon, macOS 12+, AU/VST3/CLAP; not notarised, so right-click and choose Open), Windows setup `.exe` (VST3/CLAP), Linux `.tar.gz` (VST3/CLAP). The user manual and update history are attached.
 

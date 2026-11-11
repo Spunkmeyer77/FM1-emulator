@@ -69,6 +69,9 @@ impl Default for Ui {
 }
 
 const NKEY: i32 = 37;
+/// The FM-1 skin's width / height, and the bar's height above it: the window's shape.
+const PANEL_RATIO: f32 = skin::W as f32 / skin::H as f32;
+const BAR_H: f32 = 64.0;
 
 pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>> {
     // (the state outlives a window: one opened again has a new egui context, so the panel's
@@ -93,7 +96,7 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
 
         // the whole window can be resized from its corner (the size is kept with the project)
         let editor_state = params.editor_state.clone();
-        ResizableWindow::new("fm1-resize").min_size(egui::Vec2::new(658.0, 470.0)).max_size(egui::Vec2::new(1470.0, 1050.0)).keep_aspect(1.4).show(ctx, &editor_state, |rw| {
+        ResizableWindow::new("fm1-resize").min_size(egui::Vec2::new(658.0, 515.0)).max_size(egui::Vec2::new(1470.0, 1071.0)).keep_aspect(PANEL_RATIO, BAR_H).show(ctx, &editor_state, |rw| {
         egui::TopBottomPanel::top("bar").show_inside(rw, |bar| {
             bar.horizontal_wrapped(|bar| {
                 if ui.msg_until.is_some_and(|until| std::time::Instant::now() >= until) {
@@ -153,7 +156,8 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                     r.menu_button("Size", |m| {
                         for (label, scale) in [("75%", 0.75f32), ("100%", 1.0), ("125%", 1.25), ("150%", 1.5)] {
                             if m.button(label).clicked() {
-                                editor_state.set_requested_size(((980.0 * scale) as u32, (700.0 * scale) as u32));
+                                let w = 980.0 * scale;
+                                editor_state.set_requested_size((w as u32, (w / PANEL_RATIO + BAR_H) as u32));
                                 m.close_menu();
                             }
                         }
@@ -161,10 +165,11 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                 });
             });
         });
-        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(egui::Color32::from_rgb(0x18, 0x19, 0x1b))).show_inside(rw, |c| {
+        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(egui::Color32::from_rgb(0x24, 0x22, 0x20))).show_inside(rw, |c| {
             let avail = c.available_rect_before_wrap();
             let k = (avail.width() / w as f32).min(avail.height() / h as f32);
-            let rect = egui::Rect::from_center_size(avail.center(), egui::vec2(w as f32 * k, h as f32 * k));
+            // the panel sits right under the bar; any spare room (a host that sets another shape) is desk
+            let rect = egui::Rect::from_min_size(egui::pos2(avail.center().x - w as f32 * k / 2.0, avail.min.y), egui::vec2(w as f32 * k, h as f32 * k));
             let resp = c.allocate_rect(rect, egui::Sense::click_and_drag());
             let at = |p: egui::Pos2| ((p.x - rect.min.x) / k, (p.y - rect.min.y) / k);
 

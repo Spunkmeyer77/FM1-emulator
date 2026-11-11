@@ -181,7 +181,7 @@ impl Lead {
 impl Default for Fm1Params {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(980, 700),
+            editor_state: EguiState::from_size(980, 735),
             firmware: Mutex::new(Firmware::default()),
             flash: Mutex::new(Vec::new()),
             held_keys: std::sync::atomic::AtomicU32::new(0),
