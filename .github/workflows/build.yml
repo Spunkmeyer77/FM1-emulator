@@ -21,9 +21,11 @@ env:
 
 jobs:
   macos:
-    runs-on: macos-15
+    # an Intel runner building for Apple silicon (GitHub's Apple silicon runners are short of capacity)
+    runs-on: macos-15-intel
     env:
       MACOSX_DEPLOYMENT_TARGET: '12.0'
+      FM1_TARGET: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v4
       - run: brew install ninja
@@ -37,7 +39,14 @@ jobs:
             echo "$b minos=$m"
             [ "$(printf '%s\n12.0\n' "$m" | sort -V | tail -1)" = "12.0" ] || { echo "minos $m > 12.0"; exit 1; }
           done
+      - name: Check the binaries are Apple silicon
+        run: |
+          cd target/plugin
+          for b in FM-1.clap/Contents/MacOS/FM-1 FM-1.component/Contents/MacOS/* FM-1.vst3/Contents/MacOS/*; do
+            lipo -archs "$b"; lipo -archs "$b" | grep -q arm64
+          done
       - name: Install and run Apple's AU validator
+        if: runner.arch == 'ARM64'
         run: |
           mkdir -p ~/Library/Audio/Plug-Ins/Components
           cp -R target/plugin/FM-1.component ~/Library/Audio/Plug-Ins/Components/

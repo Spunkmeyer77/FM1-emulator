@@ -22,11 +22,21 @@ sign() {
 }
 
 # the CLAP: a bundle around the cdylib
-(cd crates/fm1-plugin && cargo build --release)
+# FM1_TARGET=aarch64-apple-darwin builds for Apple silicon from an Intel Mac
+if [ -n "${FM1_TARGET:-}" ]; then
+  rustup target add "$FM1_TARGET"
+  (cd crates/fm1-plugin && cargo build --release --target "$FM1_TARGET")
+  dylib=crates/fm1-plugin/target/$FM1_TARGET/release/libfm1_plugin.dylib
+  case "$FM1_TARGET" in aarch64*) osx_arch=arm64 ;; *) osx_arch=x86_64 ;; esac
+else
+  (cd crates/fm1-plugin && cargo build --release)
+  dylib=crates/fm1-plugin/target/release/libfm1_plugin.dylib
+  osx_arch=$(uname -m)
+fi
 clap=$out/FM-1.clap
 rm -rf "$clap"
 mkdir -p "$clap/Contents/MacOS"
-cp crates/fm1-plugin/target/release/libfm1_plugin.dylib "$clap/Contents/MacOS/FM-1"
+cp "$dylib" "$clap/Contents/MacOS/FM-1"
 version=$(sed -nE 's/^version = "(.*)"/\1/p' crates/fm1-plugin/Cargo.toml | head -1)
 cat > "$clap/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -46,7 +56,7 @@ EOF
 sign "$clap"
 
 # the AU around it
-cmake -S crates/fm1-plugin/wrap -B "$out/build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DFM1_CLAP="$clap" >/dev/null
+cmake -S crates/fm1-plugin/wrap -B "$out/build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="$osx_arch" -DFM1_CLAP="$clap" >/dev/null
 cmake --build "$out/build"
 au=$(find "$out/build" -maxdepth 2 -name "FM-1.component" -type d | head -1)
 rm -rf "$out/FM-1.component"
