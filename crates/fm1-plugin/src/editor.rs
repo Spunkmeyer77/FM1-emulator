@@ -288,7 +288,14 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                 }
             } else {
                 let skin = ui.skin.get_or_insert_with(|| skin::Skin::new(ctx));
-                skin.draw(c.painter(), rect, &lcd, &ui.enc_clicks, params.master.value(), &ui.down, &leds);
+                let held = params.held_keys.load(std::sync::atomic::Ordering::Relaxed);
+                let mut down = ui.down;
+                for k in 0..27 {
+                    if held & (1 << k) != 0 {
+                        down[14 + k] = true;
+                    }
+                }
+                skin.draw(c.painter(), rect, &lcd, &ui.enc_clicks, params.master.value(), &down, &leds);
             }
             for t in ui.turning.iter_mut() {
                 *t = t.saturating_sub(1);

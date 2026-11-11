@@ -51,6 +51,8 @@ pub struct Fm1Params {
     pub firmware: Mutex<Firmware>,
     #[persist = "flash"]
     pub flash: Mutex<Vec<Sector>>,
+    /// The panel keys held by incoming MIDI notes (bit i: key i, F3 up), for the editor to show.
+    pub held_keys: std::sync::atomic::AtomicU32,
 
     /// The MASTER pot.
     #[id = "master"]
@@ -156,6 +158,7 @@ impl Default for Fm1Params {
             editor_state: EguiState::from_size(980, 700),
             firmware: Mutex::new(Firmware::default()),
             flash: Mutex::new(Vec::new()),
+            held_keys: std::sync::atomic::AtomicU32::new(0),
             master: FloatParam::new("Master", 900.0 / 1023.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_unit(" %")
                 .with_value_to_string(formatters::v2s_f32_percentage(0))
@@ -358,6 +361,20 @@ impl Plugin for Fm1 {
             let len = midi_len(b[0]);
             if len == 0 {
                 continue;
+            }
+            // show the note on the panel: its key, folded into the FM-1's F3..G5 by octaves
+            let kind = b[0] & 0xf0;
+            if kind == 0x80 || kind == 0x90 {
+                let mut k = b[1] as i32 - 53;
+                while k < 0 { k += 12; }
+                while k > 26 { k -= 12; }
+                let bit = 1u32 << k;
+                let held = &self.params.held_keys;
+                if kind == 0x90 && b[2] > 0 {
+                    held.fetch_or(bit, std::sync::atomic::Ordering::Relaxed);
+                } else {
+                    held.fetch_and(!bit, std::sync::atomic::Ordering::Relaxed);
+                }
             }
             if ch != 0 {
                 b[0] = (b[0] & 0xf0) | (ch - 1);
