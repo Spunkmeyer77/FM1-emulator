@@ -7,6 +7,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a GitHub Release (tag v<version>)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -123,7 +128,7 @@ jobs:
         with: { name: linux, path: dist/* }
 
   release:
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' || inputs.release
     needs: [macos, windows, linux]
     runs-on: ubuntu-latest
     steps:
@@ -133,7 +138,7 @@ jobs:
       - name: GitHub Release
         env: { GH_TOKEN: '${{ github.token }}' }
         run: |
-          v=${GITHUB_REF_NAME#v}
+          v=$(sed -nE 's/^version = "(.*)"/\1/p' crates/fm1-plugin/Cargo.toml | head -1)
           cp docs/manual/*.pdf dist/
           ls -la dist
-          gh release create "$GITHUB_REF_NAME" dist/* --title "FM-1 emulator $v" --notes-file "docs/releases/notes-v$v.md"
+          gh release create "v$v" dist/* --target "$GITHUB_SHA" --title "FM-1 emulator $v" --notes-file "docs/releases/notes-v$v.md"
