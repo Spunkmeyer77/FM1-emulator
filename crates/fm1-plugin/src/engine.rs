@@ -195,6 +195,10 @@ pub fn run(
     let mut made: u64 = 0; // frames pushed since boot
     let mut due: VecDeque<Midi> = VecDeque::new();
     let mut pot = u16::MAX;
+    let mut enc_last: [f32; 7] = std::array::from_fn(|i| params.encs[i].v.value());
+    let mut enc_frac = [0f32; 7];
+    let mut btn_last: [bool; 14] = std::array::from_fn(|i| params.btns[i].v.value());
+    let mut btn_up: [Option<Instant>; 14] = [None; 14];
     // the sectors last put in the project's state
     let mut saved: Sectors = Vec::new();
     let mut last_view = Instant::now();
@@ -283,6 +287,33 @@ pub fn run(
             }
         }
         snapshots(&mut pending, m.as_ref(), &params, Instant::now());
+        // the knobs and buttons as host parameters (MIDI mappable): a knob's change turns its
+        // encoder by as many clicks; a button's change presses it, released 60 ms later
+        if m.as_ref().is_some_and(|m| m.soc.board == Board::Fm1) {
+            for (i, e) in params.encs.iter().enumerate() {
+                let v = e.v.value();
+                let d = (v - enc_last[i]) * crate::ENC_SWEEP + enc_frac[i];
+                let clicks = d.trunc() as i32;
+                enc_frac[i] = d - clicks as f32;
+                enc_last[i] = v;
+                if clicks != 0 {
+                    apply(&mut m, Action::Enc { enc: crate::ENC_NAMES[i].1, clicks });
+                }
+            }
+            let now = Instant::now();
+            for (i, b) in params.btns.iter().enumerate() {
+                let v = b.v.value();
+                if v != btn_last[i] {
+                    btn_last[i] = v;
+                    apply(&mut m, Action::Key { id: i as u8, down: true });
+                    btn_up[i] = Some(now + Duration::from_millis(60));
+                }
+                if btn_up[i].is_some_and(|t| now >= t) {
+                    btn_up[i] = None;
+                    apply(&mut m, Action::Key { id: i as u8, down: false });
+                }
+            }
+        }
         // the MASTER pot, a host parameter
         let p = (params.master.value() * 1023.0).round().clamp(0.0, 1023.0) as u16;
         if p != pot && m.as_ref().is_some_and(|m| m.soc.board == Board::Fm1) {

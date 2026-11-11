@@ -43,6 +43,26 @@ pub struct Sector {
     pub data: Arc<Vec<u8>>,
 }
 
+/// Knob names and their encoder numbers on the FM-1, in the panel's order.
+pub const ENC_NAMES: [(&str, u8); 7] =
+    [("SELECT", 0), ("PRESETS", 6), ("ALGORITHM", 1), ("KNOB 1", 2), ("KNOB 2", 3), ("KNOB 3", 4), ("KNOB 4", 5)];
+/// Clicks for a full sweep of a knob parameter.
+pub const ENC_SWEEP: f32 = 64.0;
+pub const BTN_NAMES: [&str; 14] =
+    ["OCT-", "OCT+", "FX", "SCL", "ENV", "LFO", "EDIT", "GLO", "HOME", "SAVE", "ARP", "SEQ", "PLAY/STOP", "REC"];
+
+#[derive(Params)]
+pub struct EncParam {
+    #[id = "enc"]
+    pub v: FloatParam,
+}
+
+#[derive(Params)]
+pub struct BtnParam {
+    #[id = "btn"]
+    pub v: BoolParam,
+}
+
 #[derive(Params)]
 pub struct Fm1Params {
     #[persist = "editor-state"]
@@ -66,6 +86,12 @@ pub struct Fm1Params {
     /// Send MIDI clock and Start/Stop from the host's transport, so the firmware follows its tempo.
     #[id = "sync"]
     pub sync: BoolParam,
+    /// The panel's endless knobs as host parameters, for MIDI mapping: a full sweep is 64 clicks.
+    #[nested(array, group = "Knobs")]
+    pub encs: [EncParam; 7],
+    /// The panel's buttons as host parameters: each change is one press of the button.
+    #[nested(array, group = "Buttons")]
+    pub btns: [BtnParam; 14],
     /// How far ahead of the host the machine runs beyond one host block: the delay a played
     /// note hears. Changing it changes the latency the plugin reports.
     #[id = "lead"]
@@ -167,6 +193,10 @@ impl Default for Fm1Params {
                 .with_value_to_string(Arc::new(|v| if v == 0 { "as sent".into() } else { v.to_string() })),
             clock: EnumParam::new("CPU clock", Clock::Mhz240).non_automatable(),
             sync: BoolParam::new("Sync to host", true).non_automatable(),
+            encs: std::array::from_fn(|i| EncParam {
+                v: FloatParam::new(ENC_NAMES[i].0, 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }),
+            }),
+            btns: std::array::from_fn(|i| BtnParam { v: BoolParam::new(BTN_NAMES[i], false) }),
             lead: EnumParam::new("Lead", Lead::Safe).non_automatable(),
         }
     }

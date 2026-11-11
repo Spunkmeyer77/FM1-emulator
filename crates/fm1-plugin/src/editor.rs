@@ -294,7 +294,11 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                         down[14 + k] = true;
                     }
                 }
-                skin.draw(c.painter(), rect, &lcd, &ui.enc_clicks, params.master.value(), &down, &leds);
+                // knobs turned by their host parameters (MIDI mapping) turn on the panel too
+                let clicks: [i32; 8] = std::array::from_fn(|i| {
+                    ui.enc_clicks[i] + params.encs.get(i).map_or(0, |e| (e.v.value() * crate::ENC_SWEEP).round() as i32)
+                });
+                skin.draw(c.painter(), rect, &lcd, &clicks, params.master.value(), &down, &leds);
             }
             for t in ui.turning.iter_mut() {
                 *t = t.saturating_sub(1);
