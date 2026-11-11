@@ -7,7 +7,7 @@ use crate::engine::Cmd;
 use crate::{panel, panel_smk, skin, Clock, Fm1Params, Lead, Link};
 use fm1_soc::Board;
 use nih_plug::prelude::*;
-use nih_plug_egui::{create_egui_editor, egui, resizable_window::ResizableWindow, widgets};
+use nih_plug_egui::{create_egui_editor, egui, widgets};
 use std::sync::Arc;
 
 /// A pointer's grab: what it hit (fm1-web's panel_hit codes), where it was, what it holds.
@@ -39,6 +39,8 @@ struct Ui {
     /// the About window, while it is open
     about: bool,
     skin: Option<skin::Skin>,
+    /// a new size was chosen: it applies when the window opens again
+    size_note: bool,
 }
 
 impl Default for Ui {
@@ -64,6 +66,7 @@ impl Default for Ui {
             job: None,
             about: false,
             skin: None,
+            size_note: false,
         }
     }
 }
@@ -79,6 +82,7 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
     let build = |_: &egui::Context, ui: &mut Ui| {
         ui.tex = None;
         ui.skin = None;
+        ui.size_note = false;
         ui.grab = None;
     };
     create_egui_editor(params.editor_state.clone(), Ui::default(), build, move |ctx, setter, ui| {
@@ -94,9 +98,9 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
         let smk = board == Board::Smk37;
         let (w, h) = if smk { (panel_smk::W, panel_smk::H) } else { (skin::W, skin::H) };
 
-        // the whole window can be resized from its corner (the size is kept with the project)
+        // the window opens at the size chosen in the Size menu (kept with the project)
         let editor_state = params.editor_state.clone();
-        ResizableWindow::new("fm1-resize").min_size(egui::Vec2::new(658.0, 515.0)).max_size(egui::Vec2::new(1225.0, 903.0)).keep_aspect(PANEL_RATIO, BAR_H).show(ctx, &editor_state, |rw| {
+        egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx, |rw| {
         egui::TopBottomPanel::top("bar").show_inside(rw, |bar| {
             bar.horizontal_wrapped(|bar| {
                 if ui.msg_until.is_some_and(|until| std::time::Instant::now() >= until) {
@@ -153,15 +157,23 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                 bar.with_layout(egui::Layout::right_to_left(egui::Align::Center), |r| {
                     if r.button("About").clicked() { ui.about = !ui.about; }
                     // fixed sizes, always reachable (unlike the corner of a window grown off screen)
+                    // sizes take effect when the window opens again: hosts don't reliably follow
+                    // a plugin window resizing itself while open
                     r.menu_button("Size", |m| {
+                        let now = editor_state.size().0;
                         for (label, scale) in [("75%", 0.75f32), ("90%", 0.9), ("100%", 1.0), ("110%", 1.1), ("125%", 1.25)] {
-                            if m.button(label).clicked() {
-                                let w = 980.0 * scale;
-                                editor_state.set_requested_size((w as u32, (w / PANEL_RATIO + BAR_H) as u32));
+                            let w = 980.0 * scale;
+                            let mark = if (now as f32 - w).abs() < 2.0 { "  \u{2713}" } else { "" };
+                            if m.button(format!("{label}{mark}")).clicked() {
+                                editor_state.set_size((w as u32, (w / PANEL_RATIO + BAR_H) as u32));
+                                ui.size_note = (w as u32) != now;
                                 m.close_menu();
                             }
                         }
                     });
+                    if ui.size_note {
+                        r.colored_label(egui::Color32::from_rgb(0xff, 0x8a, 0x1f), "Close and reopen the window to apply the new size");
+                    }
                 });
             });
         });

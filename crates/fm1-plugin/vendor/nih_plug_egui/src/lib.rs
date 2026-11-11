@@ -113,6 +113,12 @@ impl EguiState {
     }
 
     /// Set the new size that will be used to resize the window if the host allows.
+    /// (FM-1 emulator) The size the window opens at next time: hosts reliably honour the size a
+    /// window opens at, not always a window resizing itself while open.
+    pub fn set_size(&self, new_size: (u32, u32)) {
+        self.size.store(new_size);
+    }
+
     pub fn set_requested_size(&self, new_size: (u32, u32)) {
         self.requested_size.store(Some(new_size));
     }
