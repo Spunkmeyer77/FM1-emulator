@@ -211,6 +211,7 @@ pub struct Fm1 {
     /// MIDI clock: whether the host was playing, and the next clock tick (24 a beat) to send
     was_playing: bool,
     next_tick: i64,
+    tick_phase: f64,
     /// this block's MIDI (notes and clock), put in time order before it goes to the machine
     pending: Vec<(u64, u32, Midi)>,
 }
@@ -229,6 +230,7 @@ impl Default for Fm1 {
             lead_of: Lead::Safe,
             was_playing: false,
             next_tick: 0,
+            tick_phase: 0.0,
             pending: Vec::with_capacity(1024),
             taken: 0,
             frac: 0.0,
@@ -371,7 +373,7 @@ impl Plugin for Fm1 {
         {
             let n = buffer.samples();
             let t = ctx.transport();
-            let playing = t.playing && self.params.sync.value();
+            let playing = t.playing;
             let host_rate = RATE / self.ratio;
             let base = start + self.lead as u64;
             let ratio = self.ratio;
@@ -382,13 +384,26 @@ impl Plugin for Fm1 {
                     p.push((frame, seq, Midi { frame, bytes: [byte, 0, 0], len: 1 }));
                 }
             };
-            match (playing, t.tempo, t.pos_beats()) {
-                (true, Some(tempo), Some(pos)) if tempo > 0.0 => {
+            // the clock runs whenever the host gives a tempo (as a hardware sequencer's clock out
+            // does, so a firmware can lock to it before Start); while playing it follows the host's
+            // beat position, while stopped (or with no position) it runs on from its own count
+            let sync = self.params.sync.value();
+            match (sync, t.tempo) {
+                (true, Some(tempo)) if tempo > 0.0 => {
                     let ticks_per_sample = tempo / 60.0 * 24.0 / host_rate;
-                    let tick_pos = pos * 24.0;
-                    if !self.was_playing {
-                        send(&mut self.pending, 0.0, if pos <= 0.001 { 0xfa } else { 0xfb });
-                        self.next_tick = tick_pos.ceil() as i64;
+                    let tick_pos = match (playing, t.pos_beats()) {
+                        (true, Some(pos)) => {
+                            if !self.was_playing {
+                                send(&mut self.pending, 0.0, if pos <= 0.001 { 0xfa } else { 0xfb });
+                                self.next_tick = (pos * 24.0).ceil() as i64;
+                                self.tick_phase = pos * 24.0;
+                            }
+                            pos * 24.0
+                        }
+                        _ => self.tick_phase,
+                    };
+                    if !playing && self.was_playing {
+                        send(&mut self.pending, 0.0, 0xfc);
                     }
                     // a jump (loop, locate): carry on from where the host is now
                     if (self.next_tick as f64 - tick_pos).abs() > 2.0 {
@@ -400,7 +415,8 @@ impl Plugin for Fm1 {
                         send(&mut self.pending, at, 0xf8);
                         self.next_tick += 1;
                     }
-                    self.was_playing = true;
+                    self.tick_phase = end;
+                    self.was_playing = playing;
                 }
                 _ => {
                     if self.was_playing {
