@@ -29,7 +29,7 @@ for nm,f in [('lit','lit.png'),('litp','lit_pressed.png')]:
         pads[f'{kind}_{nm}']=(round(px*sx),round(py*sy))
 print('pads',pads)
 # panel: rounded corners
-base=Image.open('panel2.png').convert('RGBA')
+base=Image.open('panel3.png').convert('RGBA')
 R=26; ss=4
 m=Image.new('L',(base.width*ss,base.height*ss),0)
 ImageDraw.Draw(m).rounded_rectangle((0,0,m.width-1,m.height-1),R*ss,fill=255)
