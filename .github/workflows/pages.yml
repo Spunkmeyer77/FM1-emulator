@@ -1,0 +1,176 @@
+# Test the emulator, build the site (the emulator's page and the FM-1 SID player) and publish
+# it on GitHub Pages from the Actions artifact (Settings -> Pages -> Source: GitHub Actions).
+
+name: Test and deploy
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true      # fm1-sid/: joakimeriksson/fm1-sid
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Rust wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      # The CPU, decoder and peripherals (fm1-live needs ALSA headers, the tests do not).
+      - name: Unit tests
+        run: cargo test --release -p fm1-isa -p fm1-core -p fm1-soc -p fm1-web
+
+      - name: Browser code regression tests
+        run: node --test web/*.test.mjs
+
+      # The README's table of firmwares (links that open each one on the page) matches the catalog.
+      - name: README firmware table
+        run: node tools/readme_firmwares.mjs --check
+
+      - name: Build the site
+        run: tools/build_site.sh _site
+
+      # The emulator's wasm boots a real firmware (Felucca, fetched from its author's site like
+      # the page does) to audio and a screen, and a MIDI note sounds.
+      - name: Test the emulator page
+        run: node web/smoke.mjs _site
+
+      - name: WASM save round trip
+        run: node web/persistence.wasm.mjs _site
+
+      # The SMK-37 page's wasm boots an SMK-37 build (GHOULBOX, from genkigenki's install page)
+      # as the SMK-37 board, and a key on its keybed sounds.
+      - name: Test the SMK-37 page
+        run: node web/smoke_smk37.mjs _site
+
+      # The SID player's wasm boots the player firmware with the page's own tune pack.
+      - name: Test the FM-1 SID player page
+        run: node fm1-sid/web/smoke.mjs _site/fm1-sid
+
+      - if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  # The AArch64 JIT on Linux (the Macs test it in plugin-tests): the core's tests, then FM-1 SID's
+  # committed package played with the JIT and interpreted, the same audio (the interpreter is the
+  # JIT's oracle; one run may end half a buffer later, so the shorter one's length is compared).
+  linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true      # fm1-sid/: joakimeriksson/fm1-sid
+
+      - name: Rust and ALSA headers
+        run: |
+          command -v cargo || { curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"; }
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libasound2-dev pkg-config
+
+      - name: Core tests
+        run: cargo test --release -p fm1-isa -p fm1-core -p fm1-soc
+
+      - name: JIT against the interpreter
+        run: |
+          cargo build --release -p fm1-live
+          pkg=fm1-sid/web/sidplayer.fwsc
+          FM1_BENCH_WAV=jit.raw target/release/fm1-live --fwsc $pkg --bench 4000 | tee jit.txt
+          FM1_NO_JIT=1 FM1_BENCH_WAV=int.raw target/release/fm1-live --fwsc $pkg --bench 4000 | tee int.txt
+          n=$(stat -c %s jit.raw int.raw | sort -n | head -1)
+          test "$n" -gt 100000
+          cmp -n "$n" jit.raw int.raw
+          # (the JIT ran: well over the interpreter's speed)
+          awk '/ms emulated/ { for (i = 1; i <= NF; i++) if ($i ~ /x$/ && $(i+1) == "real") print $i + 0 }' jit.txt int.txt | paste -sd' ' - | awk 'NF == 2 { ok = $1 > 1.5 * $2 } END { exit !ok }'
+
+      # (Android: the same AArch64 JIT, compiled only; no device here)
+      - name: The JIT builds for Android
+        run: |
+          rustup target add aarch64-linux-android
+          cargo check --release --target aarch64-linux-android -p fm1-core
+
+  # The x86-64 JIT (jit/x64.rs): the same checks on an x86-64 runner.
+  linux-x86_64:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true      # fm1-sid/: joakimeriksson/fm1-sid
+
+      - name: Rust and ALSA headers
+        run: |
+          command -v cargo || { curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"; }
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libasound2-dev pkg-config
+
+      - name: Core tests
+        run: cargo test --release -p fm1-isa -p fm1-core -p fm1-soc
+
+      - name: JIT against the interpreter
+        run: |
+          cargo build --release -p fm1-live
+          pkg=fm1-sid/web/sidplayer.fwsc
+          FM1_BENCH_WAV=jit.raw target/release/fm1-live --fwsc $pkg --bench 4000 | tee jit.txt
+          FM1_NO_JIT=1 FM1_BENCH_WAV=int.raw target/release/fm1-live --fwsc $pkg --bench 4000 | tee int.txt
+          n=$(stat -c %s jit.raw int.raw | sort -n | head -1)
+          test "$n" -gt 100000
+          cmp -n "$n" jit.raw int.raw
+          # (the JIT ran: well over the interpreter's speed)
+          awk '/ms emulated/ { for (i = 1; i <= NF; i++) if ($i ~ /x$/ && $(i+1) == "real") print $i + 0 }' jit.txt int.txt | paste -sd' ' - | awk 'NF == 2 { ok = $1 > 1.5 * $2 } END { exit !ok }'
+
+  # The x86-64 JIT on Windows (System V code, VirtualAlloc): the same checks.
+  windows-x86_64:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true      # fm1-sid/: joakimeriksson/fm1-sid
+
+      - name: Core tests
+        run: cargo test --release -p fm1-isa -p fm1-core -p fm1-soc
+
+      - name: JIT against the interpreter
+        run: |
+          cargo build --release -p fm1-live
+          pkg=fm1-sid/web/sidplayer.fwsc
+          FM1_BENCH_WAV=jit.raw target/release/fm1-live --fwsc $pkg --bench 4000 | tee jit.txt
+          FM1_NO_JIT=1 FM1_BENCH_WAV=int.raw target/release/fm1-live --fwsc $pkg --bench 4000 | tee int.txt
+          n=$(stat -c %s jit.raw int.raw | sort -n | head -1)
+          test "$n" -gt 100000
+          cmp -n "$n" jit.raw int.raw
+          # (the JIT ran: well over the interpreter's speed; SID idles 81% of the cycles, so the
+          # gain is diluted, and Windows runners are noisy: 1.49x on the first run)
+          awk '/ms emulated/ { for (i = 1; i <= NF; i++) if ($i ~ /x$/ && $(i+1) == "real") print $i + 0 }' jit.txt int.txt | paste -sd' ' - | awk 'NF == 2 { ok = $1 > 1.3 * $2 } END { exit !ok }'
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
