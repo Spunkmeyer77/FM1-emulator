@@ -158,4 +158,9 @@ jobs:
           v=$(sed -nE 's/^version = "(.*)"/\1/p' crates/fm1-plugin/Cargo.toml | head -1)
           cp docs/manual/*.pdf dist/
           ls -la dist
-          gh release create "v$v" dist/* --target "$GITHUB_SHA" --title "FM-1 emulator $v" --notes-file "docs/releases/notes-v$v.md"
+          # a release that already exists (e.g. Linux added later) gets the files uploaded into it
+          if gh release view "v$v" >/dev/null 2>&1; then
+            gh release upload "v$v" dist/* --clobber
+          else
+            gh release create "v$v" dist/* --target "$GITHUB_SHA" --title "FM-1 emulator $v" --notes-file "docs/releases/notes-v$v.md"
+          fi
