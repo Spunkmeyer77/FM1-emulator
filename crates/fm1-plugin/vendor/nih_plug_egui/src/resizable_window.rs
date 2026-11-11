@@ -66,9 +66,13 @@ impl ResizableWindow {
 
             let corner_response = ui.interact(corner_rect, self.id.with("corner"), Sense::drag());
 
-            if let Some(pointer_pos) = corner_response.interact_pointer_pos() {
-                let mut desired_size = (pointer_pos - ui_rect.min + 0.5 * corner_response.rect.size())
-                    .max(self.min_size);
+            // (FM-1 emulator) the window changes size once, when the drag ends: resizing it on
+            // every frame of the drag made the content jump (on macOS the view grows from its
+            // bottom-left corner, so the pointer moved against it). While dragging, an outline
+            // shows the new size.
+            let origin = context.input(|i| i.pointer.press_origin());
+            if let (Some(pointer_pos), Some(origin)) = (corner_response.interact_pointer_pos(), origin) {
+                let mut desired_size = (ui_rect.size() + (pointer_pos - origin)).max(self.min_size);
                 if let Some(max) = self.max_size {
                     desired_size = desired_size.min(max);
                 }
@@ -79,6 +83,27 @@ impl ResizableWindow {
                 }
 
                 if corner_response.dragged() {
+                    let painter = content_ui.ctx().layer_painter(crate::egui::LayerId::new(
+                        crate::egui::Order::Foreground,
+                        self.id.with("outline"),
+                    ));
+                    let r = Rect::from_min_size(ui_rect.min, desired_size);
+                    painter.rect_filled(ui_rect, 0.0, crate::egui::Color32::from_black_alpha(90));
+                    painter.rect_stroke(
+                        r.shrink(1.0),
+                        4.0,
+                        crate::egui::Stroke::new(2.0, crate::egui::Color32::from_rgb(0xff, 0x8a, 0x1f)),
+                        crate::egui::StrokeKind::Inside,
+                    );
+                    painter.text(
+                        r.center().min(ui_rect.center() + ui_rect.size() * 0.4),
+                        crate::egui::Align2::CENTER_CENTER,
+                        format!("{} x {}  (release to resize)", desired_size.x.round(), desired_size.y.round()),
+                        crate::egui::FontId::proportional(16.0),
+                        crate::egui::Color32::WHITE,
+                    );
+                }
+                if corner_response.drag_stopped() {
                     egui_state.set_requested_size((
                         desired_size.x.round() as u32,
                         desired_size.y.round() as u32,

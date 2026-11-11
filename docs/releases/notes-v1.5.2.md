@@ -2,6 +2,8 @@
 
 - Turning SELECT, PRESETS, ALGORITHM or KNOB 1-4 on the panel now moves its host parameter, so the host can reveal, record and MIDI-map it (Ableton's Configure mode).
 - The Mac plugin is universal (Apple silicon and Intel).
+- Smoother resizing: an outline shows the new size while you drag the corner, and the window changes once, when you let go.
+- Size menu: 75%, 90%, 100%, 110%, 125%; the largest size is now 125% so the window fits a laptop screen.
 
 Downloads: macOS `.pkg` (macOS 12+, AU/VST3/CLAP; not notarised, so right-click and choose Open), Windows setup `.exe` (VST3/CLAP), Linux `.tar.gz` (VST3/CLAP). The user manual and update history are attached.
 
