@@ -284,10 +284,10 @@ fn midi_len(status: u8) -> u8 {
 }
 
 impl Plugin for Fm1 {
-    const NAME: &'static str = "FM-1";
-    const VENDOR: &'static str = "fm1-emu";
-    const URL: &'static str = "https://github.com/joakimeriksson/fm1-emu";
-    const EMAIL: &'static str = "";
+    const NAME: &'static str = "FM-1 emulator";
+    const VENDOR: &'static str = "Transistor Labs";
+    const URL: &'static str = "https://ticcoross.gumroad.com/";
+    const EMAIL: &'static str = "ticcoross@gmail.com";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
     const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
@@ -391,8 +391,8 @@ impl Plugin for Fm1 {
 }
 
 impl ClapPlugin for Fm1 {
-    const CLAP_ID: &'static str = "io.github.joakimeriksson.fm1-emu";
-    const CLAP_DESCRIPTION: Option<&'static str> = Some("The M-VAVE FM-1 emulated: its community firmwares as an instrument");
+    const CLAP_ID: &'static str = "com.transistorlabs.fm1-emulator";
+    const CLAP_DESCRIPTION: Option<&'static str> = Some("FM-1 emulator by Transistor Labs: the M-VAVE FM-1 pocket synth emulated (unofficial)");
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[ClapFeature::Instrument, ClapFeature::Synthesizer, ClapFeature::Stereo];

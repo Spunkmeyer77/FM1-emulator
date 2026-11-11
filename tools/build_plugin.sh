@@ -8,6 +8,7 @@
 #   SIGN_IDENTITY="Developer ID Application: ..." tools/build_plugin.sh
 # tools/package_plugin.sh zips what this builds for a release.
 set -euo pipefail
+export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-12.0}
 cd "$(dirname "$0")/.."
 root=$PWD
 out=$root/target/plugin
@@ -33,8 +34,9 @@ cat > "$clap/Contents/Info.plist" <<EOF
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key><string>FM-1</string>
-  <key>CFBundleIdentifier</key><string>io.github.joakimeriksson.fm1-emu.clap</string>
-  <key>CFBundleName</key><string>FM-1</string>
+  <key>CFBundleIdentifier</key><string>com.transistorlabs.fm1-emulator.clap</string>
+  <key>CFBundleName</key><string>FM-1 emulator</string>
+  <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>CFBundlePackageType</key><string>BNDL</string>
   <key>CFBundleShortVersionString</key><string>$version</string>
   <key>CFBundleVersion</key><string>$version</string>
@@ -75,4 +77,4 @@ cp -R "$out/FM-1.vst3" "$dst/VST3/"
 # (the AU host caches components: a new build is seen once it is told to look again)
 killall -9 AudioComponentRegistrar 2>/dev/null || true
 echo "installed in $dst"
-auval -v aumu Fm1s Fm1e
+auval -v aumu Fm1e TrLb

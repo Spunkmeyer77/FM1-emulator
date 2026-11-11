@@ -36,6 +36,8 @@ struct Ui {
     /// the file dialog's answer, while it is open
     picking: Option<(FileAction, Answer)>,
     job: Option<Job>,
+    /// the About window, while it is open
+    about: bool,
 }
 
 impl Default for Ui {
@@ -59,6 +61,7 @@ impl Default for Ui {
             msg_until: None,
             picking: None,
             job: None,
+            about: false,
         }
     }
 }
@@ -137,8 +140,14 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                     if speed > 0.0 { format!("could run {speed:.1}x real time{late}") } else { format!("starting{late}") }
                 };
                 bar.label(status);
+                bar.with_layout(egui::Layout::right_to_left(egui::Align::Center), |r| {
+                    if r.button("About").clicked() { ui.about = !ui.about; }
+                });
             });
         });
+        if ui.about {
+            about_window(ctx, &mut ui.about);
+        }
 
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(egui::Color32::from_rgb(0x18, 0x19, 0x1b))).show(ctx, |c| {
             let avail = c.available_rect_before_wrap();
@@ -488,4 +497,49 @@ fn slide(ui: &mut Ui, link: &Link, ctl: i32, y: f32) {
 fn velocity(link: &Link, f: f32) {
     let us = (80000f32.ln() + (2000f32.ln() - 80000f32.ln()) * f.clamp(0.0, 1.0)).exp();
     let _ = link.cmds.send(Cmd::Vel(us as u32));
+}
+
+/// The Transistor Labs About window: a dark card with the hexagon "TR" mark, the wordmark and the
+/// credits, over the panel. A click outside or on Close shuts it.
+fn about_window(ctx: &egui::Context, open: &mut bool) {
+    use egui::{Color32, FontId, Pos2, Stroke, Vec2, Align2};
+    let accent = Color32::from_rgb(0xff, 0x8a, 0x1f);
+    let screen = ctx.screen_rect();
+    // a dim veil; a click on it closes the card
+    egui::Area::new(egui::Id::new("about_veil")).order(egui::Order::Foreground).fixed_pos(screen.min).show(ctx, |a| {
+        let r = a.allocate_rect(screen, egui::Sense::click());
+        a.painter().rect_filled(screen, 0.0, Color32::from_black_alpha(170));
+        if r.clicked() { *open = false; }
+    });
+    let size = Vec2::new(420.0, 330.0);
+    let rect = egui::Rect::from_center_size(screen.center(), size);
+    egui::Area::new(egui::Id::new("about_card")).order(egui::Order::Tooltip).fixed_pos(rect.min).show(ctx, |a| {
+        a.allocate_rect(egui::Rect::from_min_size(rect.min, size), egui::Sense::click());
+        let p = a.painter().clone();
+        p.rect_filled(rect, 14.0, Color32::from_rgb(0x1c, 0x1d, 0x21));
+        p.rect_stroke(rect, 14.0, Stroke::new(1.5, accent), egui::StrokeKind::Inside);
+        // the hexagon mark
+        let c = Pos2::new(rect.center().x, rect.min.y + 62.0);
+        let hex: Vec<Pos2> = (0..6).map(|i| {
+            let t = std::f32::consts::PI / 3.0 * i as f32 - std::f32::consts::PI / 2.0;
+            c + Vec2::new(t.cos(), t.sin()) * 36.0
+        }).collect();
+        p.add(egui::Shape::convex_polygon(hex.clone(), Color32::from_rgb(0x26, 0x27, 0x2c), Stroke::new(3.0, accent)));
+        p.text(c, Align2::CENTER_CENTER, "TR", FontId::proportional(28.0), accent);
+        let mut y = rect.min.y + 118.0;
+        let mut line = |text: &str, size: f32, color: Color32, gap: f32| {
+            p.text(Pos2::new(rect.center().x, y), Align2::CENTER_TOP, text, FontId::proportional(size), color);
+            y += gap;
+        };
+        line("TRANSISTOR LABS", 13.0, Color32::from_gray(160), 22.0);
+        line("FM-1 emulator", 26.0, Color32::WHITE, 34.0);
+        line(&format!("Version {}", env!("CARGO_PKG_VERSION")), 13.0, accent, 28.0);
+        line("Emulation core: fm1-emu by Joakim Eriksson (MIT)", 12.0, Color32::from_gray(190), 18.0);
+        line("Unofficial. Not affiliated with or endorsed by M-VAVE.", 12.0, Color32::from_gray(190), 26.0);
+        line("ticcoross@gmail.com", 13.0, Color32::from_gray(220), 18.0);
+        line("ticcoross.gumroad.com", 13.0, Color32::from_gray(220), 0.0);
+        let close = egui::Rect::from_center_size(Pos2::new(rect.center().x, rect.max.y - 26.0), Vec2::new(90.0, 26.0));
+        if a.put(close, egui::Button::new("Close")).clicked() { *open = false; }
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) { *open = false; }
+    });
 }

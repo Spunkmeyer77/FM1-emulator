@@ -1,0 +1,139 @@
+# FM-1 emulator by Transistor Labs: builds the plugin for macOS (Apple silicon, macOS 12+),
+# Windows x64 and Linux x64. On a tag v<version> it publishes a GitHub Release with the
+# installers, the plugins-only archives, the user manual and the update history.
+name: Build
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  macos:
+    runs-on: macos-15
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install ninja
+      - name: Build AU, VST3, CLAP
+        run: NO_INSTALL=1 tools/build_plugin.sh
+      - name: Verify minimum macOS is 12.0 or lower
+        run: |
+          cd target/plugin
+          for b in FM-1.clap/Contents/MacOS/FM-1 FM-1.component/Contents/MacOS/* FM-1.vst3/Contents/MacOS/*; do
+            m=$(vtool -show-build "$b" | awk '/minos/{print $2}' | sort -V | tail -1)
+            echo "$b minos=$m"
+            [ "$(printf '%s\n12.0\n' "$m" | sort -V | tail -1)" = "12.0" ] || { echo "minos $m > 12.0"; exit 1; }
+          done
+      - name: Install and run Apple's AU validator
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R target/plugin/FM-1.component ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          sleep 3
+          auval -v aumu Fm1e TrLb
+      - name: Package (.pkg installer + plugins zip)
+        run: |
+          v=$(sed -nE 's/^version = "(.*)"/\1/p' crates/fm1-plugin/Cargo.toml | head -1)
+          root=$RUNNER_TEMP/pkgroot
+          mkdir -p "$root/Library/Audio/Plug-Ins/Components" "$root/Library/Audio/Plug-Ins/VST3" "$root/Library/Audio/Plug-Ins/CLAP"
+          cp -R target/plugin/FM-1.component "$root/Library/Audio/Plug-Ins/Components/"
+          cp -R target/plugin/FM-1.vst3 "$root/Library/Audio/Plug-Ins/VST3/"
+          cp -R target/plugin/FM-1.clap "$root/Library/Audio/Plug-Ins/CLAP/"
+          mkdir -p dist
+          pkgbuild --root "$root" --identifier com.transistorlabs.fm1-emulator.pkg --version "$v" \
+            --install-location / --min-os-version 12.0 "dist/FM-1-emulator-$v-macos.pkg"
+          z=FM-1-emulator-$v-macos-plugins
+          mkdir -p "$RUNNER_TEMP/zip/$z"
+          cp -R target/plugin/FM-1.component target/plugin/FM-1.vst3 target/plugin/FM-1.clap LICENSE "$RUNNER_TEMP/zip/$z/"
+          (cd "$RUNNER_TEMP/zip" && ditto -c -k --keepParent "$z" "$GITHUB_WORKSPACE/dist/$z.zip")
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with: { name: macos, path: dist/* }
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build CLAP and VST3
+        shell: pwsh
+        env: { NO_INSTALL: '1' }
+        run: tools/build_plugin.ps1
+      - name: Package (.exe installer + plugins zip)
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path crates/fm1-plugin/Cargo.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
+          New-Item -ItemType Directory -Force packaging/stage, dist | Out-Null
+          Copy-Item target/plugin/FM-1.clap packaging/stage/ -Force
+          Copy-Item target/plugin/FM-1.vst3 packaging/stage/ -Recurse -Force
+          Copy-Item LICENSE packaging/LICENSE.txt -Force
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
+            choco install innosetup -y --no-progress
+            $env:PATH += ";C:\Program Files (x86)\Inno Setup 6"
+          }
+          iscc /DAppVersion=$v /O"$PWD\dist" packaging/fm1-emulator.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $z = "FM-1-emulator-$v-windows-x64-plugins"
+          New-Item -ItemType Directory -Force "zip/$z" | Out-Null
+          Copy-Item packaging/stage/* "zip/$z/" -Recurse
+          Copy-Item LICENSE "zip/$z/LICENSE.txt"
+          Compress-Archive -Path "zip/$z" -DestinationPath "dist/$z.zip"
+          Get-ChildItem dist
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: dist/* }
+
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build pkg-config libasound2-dev libgl-dev libjack-jackd2-dev \
+            libx11-dev libx11-xcb-dev libxcb1-dev libxcb-dri2-0-dev libxcb-icccm4-dev libxcursor-dev \
+            libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev libgtk-3-dev
+      - name: Build CLAP and VST3
+        run: |
+          set -e
+          (cd crates/fm1-plugin && cargo build --release)
+          mkdir -p target/plugin
+          cp crates/fm1-plugin/target/release/libfm1_plugin.so target/plugin/FM-1.clap
+          cmake -S crates/fm1-plugin/wrap -B target/plugin/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DFM1_CLAP="$PWD/target/plugin/FM-1.clap"
+          cmake --build target/plugin/build
+          vst3=$(find target/plugin/build -name 'FM-1.vst3' -type d | head -1)
+          echo "VST3 bundle: $vst3"; find "$vst3"
+          rm -rf target/plugin/FM-1.vst3; cp -R "$vst3" target/plugin/FM-1.vst3
+      - name: Package (install script + tar.gz)
+        run: |
+          v=$(sed -nE 's/^version = "(.*)"/\1/p' crates/fm1-plugin/Cargo.toml | head -1)
+          d=FM-1-emulator-$v-linux-x64
+          mkdir -p "$d" dist
+          cp -R target/plugin/FM-1.clap target/plugin/FM-1.vst3 LICENSE "$d/"
+          cp packaging/install-linux.sh "$d/install.sh"; chmod +x "$d/install.sh"
+          tar czf "dist/$d.tar.gz" "$d"
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with: { name: linux, path: dist/* }
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [macos, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - name: GitHub Release
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          cp docs/manual/*.pdf dist/
+          ls -la dist
+          gh release create "$GITHUB_REF_NAME" dist/* --title "FM-1 emulator $v" --notes-file "docs/releases/notes-v$v.md"
