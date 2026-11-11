@@ -105,7 +105,7 @@ jobs:
           (cd crates/fm1-plugin && cargo build --release)
           mkdir -p target/plugin
           cp crates/fm1-plugin/target/release/libfm1_plugin.so target/plugin/FM-1.clap
-          cmake -S crates/fm1-plugin/wrap -B target/plugin/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DFM1_CLAP="$PWD/target/plugin/FM-1.clap"
+          cmake -S crates/fm1-plugin/wrap -B target/plugin/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DFM1_CLAP="$PWD/target/plugin/FM-1.clap"
           cmake --build target/plugin/build
           vst3=$(find target/plugin/build -name 'FM-1.vst3' -type d | head -1)
           echo "VST3 bundle: $vst3"; find "$vst3"
