@@ -147,7 +147,11 @@ impl Skin {
             self.rgba.extend([((p >> 11) * 255 / 31) as u8, (((p >> 5) & 63) * 255 / 63) as u8, ((p & 31) * 255 / 31) as u8, 255]);
         }
         if self.rgba.len() == 240 * 240 * 4 {
-            self.lcd.set(egui::ColorImage::from_rgba_unmultiplied([240, 240], &self.rgba), TextureOptions::LINEAR);
+            // shown smaller than its 240 pixels the screen is smoothed (crisp pixels would drop
+            // rows); shown larger, its pixels stay sharp, like a real LCD up close
+            let shown = LCD.2 * k * painter.ctx().pixels_per_point();
+            let filter = if shown >= 240.0 { TextureOptions::NEAREST } else { TextureOptions::LINEAR };
+            self.lcd.set(egui::ColorImage::from_rgba_unmultiplied([240, 240], &self.rgba), filter);
         }
         painter.image(self.lcd.id(), r(LCD.0, LCD.1, LCD.2, LCD.3), uv, Color32::WHITE);
 
