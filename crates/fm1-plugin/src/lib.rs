@@ -23,6 +23,7 @@ mod panel;
 #[path = "../../fm1-live/src/panel_smk.rs"]
 #[allow(dead_code)]
 mod panel_smk;
+mod skin;
 
 use engine::{Cmd, Midi, Shared, View, RATE};
 
@@ -149,7 +150,7 @@ impl Lead {
 impl Default for Fm1Params {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(960, 660),
+            editor_state: EguiState::from_size(960, 680),
             firmware: Mutex::new(Firmware::default()),
             flash: Mutex::new(Vec::new()),
             master: FloatParam::new("Master", 900.0 / 1023.0, FloatRange::Linear { min: 0.0, max: 1.0 })

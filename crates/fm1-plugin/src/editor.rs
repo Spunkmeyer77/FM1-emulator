@@ -4,7 +4,7 @@
 //! that is the host's "Master" parameter), and a bar to load a firmware package.
 
 use crate::engine::Cmd;
-use crate::{panel, panel_smk, Clock, Fm1Params, Lead, Link};
+use crate::{panel, panel_smk, skin, Clock, Fm1Params, Lead, Link};
 use fm1_soc::Board;
 use nih_plug::prelude::*;
 use nih_plug_egui::{create_egui_editor, egui, widgets};
@@ -38,6 +38,7 @@ struct Ui {
     job: Option<Job>,
     /// the About window, while it is open
     about: bool,
+    skin: Option<skin::Skin>,
 }
 
 impl Default for Ui {
@@ -62,6 +63,7 @@ impl Default for Ui {
             picking: None,
             job: None,
             about: false,
+            skin: None,
         }
     }
 }
@@ -73,6 +75,7 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
     // texture, which belongs to the old one, is made again)
     let build = |_: &egui::Context, ui: &mut Ui| {
         ui.tex = None;
+        ui.skin = None;
         ui.grab = None;
     };
     create_egui_editor(params.editor_state.clone(), Ui::default(), build, move |ctx, setter, ui| {
@@ -86,7 +89,7 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
             ui.buf = vec![0; ui.base.len()];
         }
         let smk = board == Board::Smk37;
-        let (w, h) = if smk { (panel_smk::W, panel_smk::H) } else { (panel::W, panel::H) };
+        let (w, h) = if smk { (panel_smk::W, panel_smk::H) } else { (skin::W, skin::H) };
 
         egui::TopBottomPanel::top("bar").show(ctx, |bar| {
             bar.horizontal_wrapped(|bar| {
@@ -272,29 +275,22 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                     modw: a[fm1_soc::smk::ANALOG_MOD as usize],
                 };
                 panel_smk::draw(&mut ui.buf, &ui.base, &st);
+                ui.rgba.clear();
+                ui.rgba.extend(ui.buf.iter().flat_map(|p| [(p >> 16) as u8, (p >> 8) as u8, *p as u8, 255]));
+                let img = egui::ColorImage::from_rgba_unmultiplied([w, h], &ui.rgba);
+                match ui.tex.as_mut() {
+                    Some(t) if t.size() == [w, h] => t.set(img, egui::TextureOptions::LINEAR),
+                    _ => ui.tex = Some(ctx.load_texture("panel", img, egui::TextureOptions::LINEAR)),
+                }
+                if let Some(t) = &ui.tex {
+                    c.painter().image(t.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+                }
             } else {
-                let st = panel::State {
-                    lcd: &lcd,
-                    enc_clicks: &std::array::from_fn(|i| ui.enc_clicks[i]),
-                    pot: (params.master.value() * 1023.0).round() as u16,
-                    down: &std::array::from_fn(|i| ui.down[i]),
-                    leds: &leds,
-                    turning: &std::array::from_fn(|i| ui.turning[i]),
-                };
-                panel::draw(&mut ui.buf, &ui.base, &st);
+                let skin = ui.skin.get_or_insert_with(|| skin::Skin::new(ctx));
+                skin.draw(c.painter(), rect, &lcd, &ui.enc_clicks, params.master.value(), &ui.down, &leds);
             }
             for t in ui.turning.iter_mut() {
                 *t = t.saturating_sub(1);
-            }
-            ui.rgba.clear();
-            ui.rgba.extend(ui.buf.iter().flat_map(|p| [(p >> 16) as u8, (p >> 8) as u8, *p as u8, 255]));
-            let img = egui::ColorImage::from_rgba_unmultiplied([w, h], &ui.rgba);
-            match ui.tex.as_mut() {
-                Some(t) if t.size() == [w, h] => t.set(img, egui::TextureOptions::LINEAR),
-                _ => ui.tex = Some(ctx.load_texture("panel", img, egui::TextureOptions::LINEAR)),
-            }
-            if let Some(t) = &ui.tex {
-                c.painter().image(t.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
             }
         });
         ctx.request_repaint_after(std::time::Duration::from_millis(33));
@@ -442,12 +438,7 @@ fn hit(smk: bool, x: f32, y: f32) -> i32 {
             None => -1,
         };
     }
-    match panel::hit(x, y) {
-        Some(panel::Ctl::Enc(i)) => i as i32,
-        Some(panel::Ctl::Pot) => 7,
-        Some(panel::Ctl::Btn(id)) | Some(panel::Ctl::Key(id)) => 100 + id as i32,
-        None => -1,
-    }
+    skin::hit(x, y)
 }
 
 /// How far down a key the SMK-37's panel was hit (0 top .. 1 bottom).
