@@ -12,20 +12,20 @@ pub const W: usize = (AW + 2.0 * M) as usize;
 pub const H: usize = (AH + 2.0 * M) as usize;
 
 /// Knob centres in the order of the emulator's encoders (SELECT, PRESETS, ALGORITHM, KNOB1..4).
-pub const ENCS: [(f32, f32); 7] = [
-    (279.0, 193.0), (112.0, 381.0), (279.0, 381.0),
-    (859.5, 193.0), (1038.0, 193.0), (1222.5, 193.0), (1412.5, 193.0),
+/// (x, y, radius): the left knobs are larger than KNOB 1-4.
+pub const ENCS: [(f32, f32, f32); 7] = [
+    (297.0, 196.5, 52.0), (130.0, 384.0, 52.0), (297.0, 384.0, 52.0),
+    (1138.5, 178.0, 38.0), (1244.0, 178.0, 38.0), (1350.5, 178.0, 38.0), (1456.5, 178.0, 38.0),
 ];
-pub const POT: (f32, f32) = (112.0, 193.0);
-const KNOB_R: f32 = 52.0;
-const LCD: (f32, f32, f32, f32) = (417.0, 155.0, 308.0, 308.0);
+pub const POT: (f32, f32, f32) = (130.0, 196.5, 52.0);
+const LCD: (f32, f32, f32, f32) = (450.0, 50.0, 570.0, 570.0);
 
 /// Buttons: (matrix id, x, y, w, h) of each cap.
 fn buttons() -> Vec<(u8, f32, f32, f32, f32)> {
-    let mut v = vec![(0, 75.0, 478.0, 105.0, 54.0), (1, 217.0, 478.0, 103.0, 54.0)];
+    let mut v = vec![(0, 93.0, 487.0, 105.0, 46.0), (1, 235.0, 487.0, 103.0, 46.0)];
     for r in 0..2 {
         for i in 0..6 {
-            v.push(((2 + r * 6 + i) as u8, 831.0 + i as f32 * 109.4, 328.0 + r as f32 * 110.0, 75.0, 70.0));
+            v.push(((2 + r * 6 + i) as u8, 1102.0 + i as f32 * 67.8, 299.0 + r as f32 * 68.0, 50.0, 47.0));
         }
     }
     v
@@ -36,11 +36,11 @@ fn keys() -> Vec<(u8, f32, f32, f32, f32, bool)> {
     let (pitch, gap, x0) = (90.0, 14.0, 53.0);
     let whites = [0u8, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26];
     let mut v: Vec<_> = whites.iter().enumerate()
-        .map(|(i, n)| (14 + n, x0 + i as f32 * pitch, 792.0, pitch - gap, 172.0, false)).collect();
+        .map(|(i, n)| (14 + n, x0 + i as f32 * pitch, 851.0, pitch - gap, 129.0, false)).collect();
     let blacks = [(1u8, 0usize), (3, 1), (5, 2), (8, 4), (10, 5), (13, 7), (15, 8), (17, 9), (20, 11), (22, 12), (25, 14)];
     for (n, after) in blacks {
         let cx = x0 + (after + 1) as f32 * pitch - gap / 2.0;
-        v.push((14 + n, (cx - 33.0).round(), 604.0, 66.0, 162.0, true));
+        v.push((14 + n, (cx - 33.0).round(), 708.0, 66.0, 123.0, true));
     }
     v
 }
@@ -48,12 +48,12 @@ fn keys() -> Vec<(u8, f32, f32, f32, f32, bool)> {
 /// What a panel point is, in the editor's codes: 0..6 an encoder, 7 MASTER, 100 + id a button or key.
 pub fn hit(x: f32, y: f32) -> i32 {
     let (x, y) = (x - M, y - M);
-    for (i, (cx, cy)) in ENCS.iter().enumerate() {
-        if (x - cx).powi(2) + (y - cy).powi(2) <= (KNOB_R + 8.0).powi(2) {
+    for (i, (cx, cy, r)) in ENCS.iter().enumerate() {
+        if (x - cx).powi(2) + (y - cy).powi(2) <= (r + 8.0).powi(2) {
             return i as i32;
         }
     }
-    if (x - POT.0).powi(2) + (y - POT.1).powi(2) <= (KNOB_R + 8.0).powi(2) {
+    if (x - POT.0).powi(2) + (y - POT.1).powi(2) <= (POT.2 + 8.0).powi(2) {
         return 7;
     }
     let inside = |px: f32, py: f32, w: f32, h: f32| x >= px && x < px + w && y >= py && y < py + h;
@@ -107,13 +107,13 @@ impl Skin {
             keys: [
                 [
                     (t("w_p", include_bytes!("../skin/white_pressed.png")), 0.0, 0.0),
-                    (t("w_l", include_bytes!("../skin/white_lit.png")), 9.0, 10.0),
-                    (t("w_lp", include_bytes!("../skin/white_litp.png")), 9.0, 10.0),
+                    (t("w_l", include_bytes!("../skin/white_lit.png")), 9.0, 8.0),
+                    (t("w_lp", include_bytes!("../skin/white_litp.png")), 9.0, 8.0),
                 ],
                 [
                     (t("b_p", include_bytes!("../skin/black_pressed.png")), 0.0, 0.0),
-                    (t("b_l", include_bytes!("../skin/black_lit.png")), 8.0, 10.0),
-                    (t("b_lp", include_bytes!("../skin/black_litp.png")), 8.0, 9.0),
+                    (t("b_l", include_bytes!("../skin/black_lit.png")), 8.0, 7.0),
+                    (t("b_lp", include_bytes!("../skin/black_litp.png")), 8.0, 7.0),
                 ],
             ],
             rgba: Vec::with_capacity(240 * 240 * 4),
@@ -156,10 +156,10 @@ impl Skin {
         painter.image(self.lcd.id(), r(LCD.0, LCD.1, LCD.2, LCD.3), uv, Color32::WHITE);
 
         // knobs: encoders turn 18 degrees a click; MASTER sweeps 270 degrees
-        let knob = |painter: &egui::Painter, (cx, cy): (f32, f32), angle: f32| {
+        let knob = |painter: &egui::Painter, (cx, cy, rad): (f32, f32, f32), angle: f32| {
             let c = at(cx, cy);
             let mut m = Mesh::with_texture(self.knob.id());
-            m.add_rect_with_uv(Rect::from_center_size(c, Vec2::splat(2.0 * KNOB_R * k)), uv, Color32::WHITE);
+            m.add_rect_with_uv(Rect::from_center_size(c, Vec2::splat(2.0 * rad * k)), uv, Color32::WHITE);
             m.rotate(egui::emath::Rot2::from_angle(angle), c);
             painter.add(Shape::mesh(m));
         };

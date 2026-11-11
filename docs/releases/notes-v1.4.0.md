@@ -1,5 +1,6 @@
 **FM-1 emulator 1.4.0** by Transistor Labs
 
+- New panel layout with a much larger screen, about twice the size.
 - Resizable window: drag the bottom-right corner; the panel keeps its proportions.
 - The window size is saved with the project and restored when you reopen it.
 - The screen scales with the window: smoothed when shown small, sharp pixels when shown larger than its real 240 x 240.
