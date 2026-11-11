@@ -93,7 +93,7 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
 
         // the whole window can be resized from its corner (the size is kept with the project)
         let editor_state = params.editor_state.clone();
-        ResizableWindow::new("fm1-resize").min_size(egui::Vec2::new(640.0, 470.0)).show(ctx, &editor_state, |rw| {
+        ResizableWindow::new("fm1-resize").min_size(egui::Vec2::new(658.0, 470.0)).max_size(egui::Vec2::new(1470.0, 1050.0)).keep_aspect(1.4).show(ctx, &editor_state, |rw| {
         egui::TopBottomPanel::top("bar").show_inside(rw, |bar| {
             bar.horizontal_wrapped(|bar| {
                 if ui.msg_until.is_some_and(|until| std::time::Instant::now() >= until) {
@@ -149,6 +149,15 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                 bar.label(status);
                 bar.with_layout(egui::Layout::right_to_left(egui::Align::Center), |r| {
                     if r.button("About").clicked() { ui.about = !ui.about; }
+                    // fixed sizes, always reachable (unlike the corner of a window grown off screen)
+                    r.menu_button("Size", |m| {
+                        for (label, scale) in [("75%", 0.75f32), ("100%", 1.0), ("125%", 1.25), ("150%", 1.5)] {
+                            if m.button(label).clicked() {
+                                editor_state.set_requested_size(((980.0 * scale) as u32, (700.0 * scale) as u32));
+                                m.close_menu();
+                            }
+                        }
+                    });
                 });
             });
         });

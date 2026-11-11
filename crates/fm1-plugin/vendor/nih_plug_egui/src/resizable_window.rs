@@ -11,6 +11,8 @@ use crate::EguiState;
 pub struct ResizableWindow {
     id: Id,
     min_size: Vec2,
+    max_size: Option<Vec2>,
+    aspect: Option<f32>,
 }
 
 impl ResizableWindow {
@@ -18,7 +20,24 @@ impl ResizableWindow {
         Self {
             id: Id::new(id_source),
             min_size: Vec2::splat(16.0),
+            max_size: None,
+            aspect: None,
         }
+    }
+
+    /// Won't grow larger than this (FM-1 emulator: a host stops at the screen's edge, and a
+    /// window grown past it leaves its corner out of reach)
+    #[inline]
+    pub fn max_size(mut self, max_size: impl Into<Vec2>) -> Self {
+        self.max_size = Some(max_size.into());
+        self
+    }
+
+    /// Keep width / height at this ratio while dragging (FM-1 emulator)
+    #[inline]
+    pub fn keep_aspect(mut self, ratio: f32) -> Self {
+        self.aspect = Some(ratio);
+        self
     }
 
     /// Won't shrink to smaller than this
@@ -47,8 +66,16 @@ impl ResizableWindow {
             let corner_response = ui.interact(corner_rect, self.id.with("corner"), Sense::drag());
 
             if let Some(pointer_pos) = corner_response.interact_pointer_pos() {
-                let desired_size = (pointer_pos - ui_rect.min + 0.5 * corner_response.rect.size())
+                let mut desired_size = (pointer_pos - ui_rect.min + 0.5 * corner_response.rect.size())
                     .max(self.min_size);
+                if let Some(max) = self.max_size {
+                    desired_size = desired_size.min(max);
+                }
+                if let Some(r) = self.aspect {
+                    // the width follows the pointer, or the height, whichever asks for less
+                    let w = desired_size.x.min(desired_size.y * r);
+                    desired_size = Vec2::new(w, w / r).max(self.min_size);
+                }
 
                 if corner_response.dragged() {
                     egui_state.set_requested_size((
