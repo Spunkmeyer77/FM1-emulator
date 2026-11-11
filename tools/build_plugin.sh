@@ -22,12 +22,14 @@ sign() {
 }
 
 # the CLAP: a bundle around the cdylib
-# FM1_TARGET=aarch64-apple-darwin builds for Apple silicon from an Intel Mac
-if [ -n "${FM1_TARGET:-}" ]; then
-  rustup target add "$FM1_TARGET"
-  (cd crates/fm1-plugin && cargo build --release --target "$FM1_TARGET")
-  dylib=crates/fm1-plugin/target/$FM1_TARGET/release/libfm1_plugin.dylib
-  case "$FM1_TARGET" in aarch64*) osx_arch=arm64 ;; *) osx_arch=x86_64 ;; esac
+# FM1_TARGET=universal builds one plugin for Apple silicon and Intel (from either kind of Mac)
+if [ "${FM1_TARGET:-}" = universal ]; then
+  rustup target add aarch64-apple-darwin x86_64-apple-darwin
+  (cd crates/fm1-plugin && cargo build --release --target aarch64-apple-darwin && cargo build --release --target x86_64-apple-darwin)
+  dylib=crates/fm1-plugin/target/libfm1_plugin-universal.dylib
+  lipo -create -output "$dylib" crates/fm1-plugin/target/aarch64-apple-darwin/release/libfm1_plugin.dylib \
+    crates/fm1-plugin/target/x86_64-apple-darwin/release/libfm1_plugin.dylib
+  osx_arch="arm64;x86_64"
 else
   (cd crates/fm1-plugin && cargo build --release)
   dylib=crates/fm1-plugin/target/release/libfm1_plugin.dylib
