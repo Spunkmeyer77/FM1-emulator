@@ -47,7 +47,7 @@ pub struct Sector {
 pub const ENC_NAMES: [(&str, u8); 7] =
     [("SELECT", 0), ("PRESETS", 6), ("ALGORITHM", 1), ("KNOB 1", 2), ("KNOB 2", 3), ("KNOB 3", 4), ("KNOB 4", 5)];
 /// Clicks for a full sweep of a knob parameter.
-pub const ENC_SWEEP: f32 = 64.0;
+pub const ENC_SWEEP: f32 = 128.0;
 pub const BTN_NAMES: [&str; 14] =
     ["OCT-", "OCT+", "FX", "SCL", "ENV", "LFO", "EDIT", "GLO", "HOME", "SAVE", "ARP", "SEQ", "PLAY/STOP", "REC"];
 
@@ -86,7 +86,7 @@ pub struct Fm1Params {
     /// Send MIDI clock and Start/Stop from the host's transport, so the firmware follows its tempo.
     #[id = "sync"]
     pub sync: BoolParam,
-    /// The panel's endless knobs as host parameters, for MIDI mapping: a full sweep is 64 clicks.
+    /// The panel's endless knobs as host parameters, for MIDI mapping: a full sweep is 128 clicks (one per MIDI CC step).
     #[nested(array, group = "Knobs")]
     pub encs: [EncParam; 7],
     /// The panel's buttons as host parameters: each change is one press of the button.

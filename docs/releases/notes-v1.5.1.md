@@ -1,6 +1,7 @@
 **FM-1 emulator 1.5.1** by Transistor Labs
 
 - Size menu in the top bar: 75%, 100%, 125%, 150%.
+- MIDI-mapped knobs: a full sweep is now 128 clicks (one per MIDI value), so settings like the filter cutoff reach their full range.
 - Dragging the corner keeps the window's proportions and stops at a maximum size, so the corner can no longer end up off screen.
 - No more dark gap above the panel when resizing: the window takes the panel's exact shape and the panel sits under the top bar.
 
