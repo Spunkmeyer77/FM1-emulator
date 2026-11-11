@@ -2,7 +2,7 @@
 //! screen drawn over it, and the hit map from panel coordinates to the emulator's controls.
 //! Coordinates are in the artwork's pixels (1536 x 1024).
 
-use nih_plug_egui::egui::{self, Color32, Mesh, Pos2, Rect, Rot2, Shape, TextureHandle, TextureOptions, Vec2};
+use nih_plug_egui::egui::{self, Color32, Mesh, Pos2, Rect, Shape, TextureHandle, TextureOptions, Vec2};
 
 pub const W: usize = 1536;
 pub const H: usize = 1024;
@@ -141,7 +141,7 @@ impl Skin {
             let c = at(cx, cy);
             let mut m = Mesh::with_texture(self.knob.id());
             m.add_rect_with_uv(Rect::from_center_size(c, Vec2::splat(2.0 * KNOB_R * k)), uv, Color32::WHITE);
-            m.rotate(Rot2::from_angle(angle), c);
+            m.rotate(egui::emath::Rot2::from_angle(angle), c);
             painter.add(Shape::mesh(m));
         };
         knob(painter, POT, (pot * 270.0 - 135.0).to_radians());
