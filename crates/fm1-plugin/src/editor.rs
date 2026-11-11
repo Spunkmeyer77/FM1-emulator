@@ -126,6 +126,7 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                 bar.separator();
                 bar.label("MIDI channel");
                 bar.add(widgets::ParamSlider::for_param(&params.channel, setter).with_width(90.0));
+                bar.add(widgets::ParamSlider::for_param(&params.sync, setter).with_width(60.0)).on_hover_text("Send Ableton's tempo and Start/Stop to the firmware as MIDI clock");
                 bar.label("CPU clock").on_hover_text("The emulated FM-1's clock, 240 MHz as on the chip. Lower it if this computer can't keep up with a heavy firmware (\"frames late\"); raise it if a firmware runs out of time. Changing it restarts the firmware");
                 // a menu in the clocks' order (the parameter's own order keeps v0.2.0's projects)
                 enum_menu(bar, setter, "clock", &params.clock, &Clock::ALL, 90.0, Clock::name);

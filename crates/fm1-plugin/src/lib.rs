@@ -61,6 +61,9 @@ pub struct Fm1Params {
     /// The emulated CPU's clock. Changing it reboots the firmware (its flash is kept).
     #[id = "clock"]
     pub clock: EnumParam<Clock>,
+    /// Send MIDI clock and Start/Stop from the host's transport, so the firmware follows its tempo.
+    #[id = "sync"]
+    pub sync: BoolParam,
     /// How far ahead of the host the machine runs beyond one host block: the delay a played
     /// note hears. Changing it changes the latency the plugin reports.
     #[id = "lead"]
@@ -160,6 +163,7 @@ impl Default for Fm1Params {
             channel: IntParam::new("MIDI channel", 0, IntRange::Linear { min: 0, max: 16 })
                 .with_value_to_string(Arc::new(|v| if v == 0 { "as sent".into() } else { v.to_string() })),
             clock: EnumParam::new("CPU clock", Clock::Mhz240).non_automatable(),
+            sync: BoolParam::new("Sync to host", true).non_automatable(),
             lead: EnumParam::new("Lead", Lead::Safe).non_automatable(),
         }
     }
@@ -204,6 +208,11 @@ pub struct Fm1 {
     frac: f64,
     cur: [f32; 2],
     next: [f32; 2],
+    /// MIDI clock: whether the host was playing, and the next clock tick (24 a beat) to send
+    was_playing: bool,
+    next_tick: i64,
+    /// this block's MIDI (notes and clock), put in time order before it goes to the machine
+    pending: Vec<(u64, u32, Midi)>,
 }
 
 impl Default for Fm1 {
@@ -218,6 +227,9 @@ impl Default for Fm1 {
             lead: 2048,
             block: 1024,
             lead_of: Lead::Safe,
+            was_playing: false,
+            next_tick: 0,
+            pending: Vec::with_capacity(1024),
             taken: 0,
             frac: 0.0,
             cur: [0.0; 2],
@@ -349,9 +361,62 @@ impl Plugin for Fm1 {
                 b[0] = (b[0] & 0xf0) | (ch - 1);
             }
             let frame = start + (at as f64 * self.ratio) as u64 + self.lead as u64;
-            if let Some(m) = self.midi.as_mut() {
-                let _ = m.push(Midi { frame, bytes: b, len });
+            if self.pending.len() < self.pending.capacity() {
+                let seq = self.pending.len() as u32;
+                self.pending.push((frame, seq, Midi { frame, bytes: b, len }));
             }
+        }
+        // MIDI clock from the host's transport: Start (or Continue) when it starts, 24 ticks a beat
+        // while it plays, Stop when it stops
+        {
+            let n = buffer.samples();
+            let t = ctx.transport();
+            let playing = t.playing && self.params.sync.value();
+            let host_rate = RATE / self.ratio;
+            let base = start + self.lead as u64;
+            let ratio = self.ratio;
+            let send = |p: &mut Vec<(u64, u32, Midi)>, sample: f64, byte: u8| {
+                if p.len() < p.capacity() {
+                    let frame = base + (sample.max(0.0) * ratio) as u64;
+                    let seq = p.len() as u32;
+                    p.push((frame, seq, Midi { frame, bytes: [byte, 0, 0], len: 1 }));
+                }
+            };
+            match (playing, t.tempo, t.pos_beats()) {
+                (true, Some(tempo), Some(pos)) if tempo > 0.0 => {
+                    let ticks_per_sample = tempo / 60.0 * 24.0 / host_rate;
+                    let tick_pos = pos * 24.0;
+                    if !self.was_playing {
+                        send(&mut self.pending, 0.0, if pos <= 0.001 { 0xfa } else { 0xfb });
+                        self.next_tick = tick_pos.ceil() as i64;
+                    }
+                    // a jump (loop, locate): carry on from where the host is now
+                    if (self.next_tick as f64 - tick_pos).abs() > 2.0 {
+                        self.next_tick = tick_pos.ceil() as i64;
+                    }
+                    let end = tick_pos + n as f64 * ticks_per_sample;
+                    while (self.next_tick as f64) < end {
+                        let at = (self.next_tick as f64 - tick_pos) / ticks_per_sample;
+                        send(&mut self.pending, at, 0xf8);
+                        self.next_tick += 1;
+                    }
+                    self.was_playing = true;
+                }
+                _ => {
+                    if self.was_playing {
+                        send(&mut self.pending, 0.0, 0xfc);
+                    }
+                    self.was_playing = false;
+                }
+            }
+        }
+        self.pending.sort_unstable_by_key(|e| (e.0, e.1));
+        if let Some(m) = self.midi.as_mut() {
+            for (_, _, e) in self.pending.drain(..) {
+                let _ = m.push(e);
+            }
+        } else {
+            self.pending.clear();
         }
         let Some(rx) = self.audio.as_mut() else { return ProcessStatus::Normal };
         let out = buffer.as_slice();
