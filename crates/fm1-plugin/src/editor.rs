@@ -220,7 +220,7 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                     g.acc -= clicks * 12.0;
                     let ctl = g.ctl;
                     if clicks != 0.0 {
-                        turn(ui, &link, smk, ctl, clicks as i32);
+                        turn(ui, &link, smk, ctl, clicks as i32, &params, setter);
                     }
                 } else if !smk && g.ctl == 7 {
                     let v = (params.master.value() + (g.last_y - y) * 4.0 / 1023.0).clamp(0.0, 1.0);
@@ -263,11 +263,11 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                         ui.wheel_acc += scroll;
                         while ui.wheel_acc >= 40.0 {
                             ui.wheel_acc -= 40.0;
-                            turn(ui, &link, smk, h, 1);
+                            turn(ui, &link, smk, h, 1, &params, setter);
                         }
                         while ui.wheel_acc <= -40.0 {
                             ui.wheel_acc += 40.0;
-                            turn(ui, &link, smk, h, -1);
+                            turn(ui, &link, smk, h, -1, &params, setter);
                         }
                     }
                 }
@@ -486,11 +486,31 @@ fn key(ui: &mut Ui, link: &Link, id: i32, down: bool) {
     let _ = link.cmds.send(Cmd::Key { id: id as u8, down });
 }
 
-fn turn(ui: &mut Ui, link: &Link, smk: bool, i: i32, clicks: i32) {
-    ui.enc_clicks[i as usize] += clicks;
+fn turn(ui: &mut Ui, link: &Link, smk: bool, i: i32, clicks: i32, params: &Fm1Params, setter: &ParamSetter) {
     ui.turning[i as usize] = 10;
-    let enc = if smk { i as u8 } else { panel::ENCS[i as usize].1 };
-    let _ = link.cmds.send(Cmd::Enc { enc, clicks });
+    let mut rest = clicks;
+    // on the FM-1 a knob turned on the panel moves its host parameter (so the host can show,
+    // record and MIDI-map it); the machine turns the encoder from the parameter's change. Past
+    // the parameter's end the clicks go straight to the encoder: the knob stays endless.
+    if !smk {
+        if let Some(e) = params.encs.get(i as usize) {
+            let cur = e.v.value();
+            let new = (cur + clicks as f32 / crate::ENC_SWEEP).clamp(0.0, 1.0);
+            let moved = ((new - cur) * crate::ENC_SWEEP).round() as i32;
+            if moved != 0 {
+                let v = cur + moved as f32 / crate::ENC_SWEEP;
+                setter.begin_set_parameter(&e.v);
+                setter.set_parameter(&e.v, v);
+                setter.end_set_parameter(&e.v);
+            }
+            rest = clicks - moved;
+        }
+    }
+    if rest != 0 {
+        ui.enc_clicks[i as usize] += rest;
+        let enc = if smk { i as u8 } else { panel::ENCS[i as usize].1 };
+        let _ = link.cmds.send(Cmd::Enc { enc, clicks: rest });
+    }
 }
 
 fn analog(ui: &mut Ui, link: &Link, i: usize, v: u16) {
