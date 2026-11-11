@@ -48,7 +48,13 @@ for after in [0,1,2,4,5,7,8,9,11,12,14]:
     cx=x0+(after+1)*pitch-gap//2; bw=66
     r=(cx-bw//2,604,bw,162); BL.append(r)
     base.alpha_composite(bkey.resize((bw,162),Image.LANCZOS),(r[0],r[1]))
-save(base.convert('RGB'),'panel')
+# rounded corners: the case's shape, anti-aliased (4x supersampled mask)
+from PIL import ImageDraw
+R=26; ss=4
+m=Image.new('L',(base.width*ss,base.height*ss),0)
+ImageDraw.Draw(m).rounded_rectangle((0,0,m.width-1,m.height-1),R*ss,fill=255)
+base.putalpha(m.resize(base.size,Image.LANCZOS))
+save(base,'panel')
 # state sprites sized to key rects
 save(W_P.resize((ww,172),Image.LANCZOS),'white_pressed'); save(B_P.resize((66,162),Image.LANCZOS),'black_pressed')
 def litcut(lst,idx,w,h,name):

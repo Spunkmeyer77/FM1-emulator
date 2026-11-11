@@ -4,8 +4,12 @@
 
 use nih_plug_egui::egui::{self, Color32, Mesh, Pos2, Rect, Shape, TextureHandle, TextureOptions, Vec2};
 
-pub const W: usize = 1536;
-pub const H: usize = 1024;
+/// The artwork's size, and the margin around it where the case's side and shadow show.
+const AW: f32 = 1536.0;
+const AH: f32 = 1024.0;
+const M: f32 = 44.0;
+pub const W: usize = (AW + 2.0 * M) as usize;
+pub const H: usize = (AH + 2.0 * M) as usize;
 
 /// Knob centres in the order of the emulator's encoders (SELECT, PRESETS, ALGORITHM, KNOB1..4).
 pub const ENCS: [(f32, f32); 7] = [
@@ -43,6 +47,7 @@ fn keys() -> Vec<(u8, f32, f32, f32, f32, bool)> {
 
 /// What a panel point is, in the editor's codes: 0..6 an encoder, 7 MASTER, 100 + id a button or key.
 pub fn hit(x: f32, y: f32) -> i32 {
+    let (x, y) = (x - M, y - M);
     for (i, (cx, cy)) in ENCS.iter().enumerate() {
         if (x - cx).powi(2) + (y - cy).powi(2) <= (KNOB_R + 8.0).powi(2) {
             return i as i32;
@@ -120,10 +125,20 @@ impl Skin {
     pub fn draw(&mut self, painter: &egui::Painter, rect: Rect, lcd: &[u16], enc_clicks: &[i32], pot: f32,
                 down: &[bool], leds: &[f32]) {
         let k = rect.width() / W as f32;
-        let at = |x: f32, y: f32| rect.min + Vec2::new(x * k, y * k);
+        let at = |x: f32, y: f32| rect.min + Vec2::new((x + M) * k, (y + M) * k);
         let r = |x: f32, y: f32, w: f32, h: f32| Rect::from_min_size(at(x, y), Vec2::new(w * k, h * k));
         let uv = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
-        painter.image(self.panel.id(), rect, uv, Color32::WHITE);
+        // the desk, the shadow the unit casts, the case's side, then the top panel
+        painter.rect_filled(rect, 0.0, Color32::from_rgb(0x24, 0x22, 0x20));
+        let body = r(0.0, 0.0, AW, AH);
+        for i in 0..14 {
+            let g = i as f32 * 2.2 * k;
+            painter.rect_filled(body.translate(Vec2::new(0.0, 14.0 * k)).expand(g), (26.0 + i as f32 * 2.0) * k,
+                Color32::from_black_alpha(14));
+        }
+        painter.rect_filled(body.translate(Vec2::new(0.0, 9.0 * k)), 26.0 * k, Color32::from_rgb(0x8a, 0x6c, 0x4c));
+        painter.rect_filled(body.translate(Vec2::new(0.0, 4.0 * k)), 26.0 * k, Color32::from_rgb(0xa8, 0x88, 0x63));
+        painter.image(self.panel.id(), body, uv, Color32::WHITE);
 
         // the screen (RGB565)
         self.rgba.clear();

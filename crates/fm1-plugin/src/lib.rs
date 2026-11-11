@@ -153,7 +153,7 @@ impl Lead {
 impl Default for Fm1Params {
     fn default() -> Self {
         Self {
-            editor_state: EguiState::from_size(960, 680),
+            editor_state: EguiState::from_size(980, 700),
             firmware: Mutex::new(Firmware::default()),
             flash: Mutex::new(Vec::new()),
             master: FloatParam::new("Master", 900.0 / 1023.0, FloatRange::Linear { min: 0.0, max: 1.0 })
