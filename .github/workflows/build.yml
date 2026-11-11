@@ -104,7 +104,7 @@ jobs:
         with: { name: windows, path: dist/* }
 
   linux:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Libraries
@@ -144,7 +144,8 @@ jobs:
         with: { name: linux, path: dist/* }
 
   release:
-    if: github.ref_type == 'tag' || inputs.release
+    # publishes even if Linux failed (its file can be added later); Mac and Windows must succeed
+    if: always() && (github.ref_type == 'tag' || inputs.release) && needs.macos.result == 'success' && needs.windows.result == 'success'
     needs: [macos, windows, linux]
     runs-on: ubuntu-latest
     steps:
