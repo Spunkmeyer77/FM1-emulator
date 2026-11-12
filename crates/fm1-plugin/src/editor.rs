@@ -111,6 +111,24 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                     ui.msg_until = result.as_ref().ok().map(|_| std::time::Instant::now() + std::time::Duration::from_secs(3));
                     ui.msg = match result { Ok(message) => message, Err(error) => error };
                 }
+                // About and Size come first, so they stay on screen at every window size (at the
+                // end of the bar they fell off its right edge at 75%)
+                if bar.button("About").clicked() { ui.about = !ui.about; }
+                // sizes take effect when the window opens again: hosts don't reliably follow a
+                // plugin window resizing itself while open
+                bar.menu_button("Size", |m| {
+                    let now = editor_state.size().0;
+                    for (label, scale) in [("75%", 0.75f32), ("90%", 0.9), ("100%", 1.0), ("110%", 1.1), ("125%", 1.25)] {
+                        let w = 980.0 * scale;
+                        let mark = if (now as f32 - w).abs() < 2.0 { "  \u{2713}" } else { "" };
+                        if m.button(format!("{label}{mark}")).clicked() {
+                            editor_state.set_size((w as u32, (w / PANEL_RATIO + BAR_H) as u32));
+                            ui.size_note = (w as u32) != now;
+                            m.close_menu();
+                        }
+                    }
+                });
+                bar.separator();
                 let name = params.firmware.lock().unwrap().name.clone();
                 let idle = ui.picking.is_none() && ui.job.is_none();
                 if bar.add_enabled(idle, egui::Button::new("Load firmware / save…"))
@@ -154,27 +172,9 @@ pub fn create(params: Arc<Fm1Params>, link: Arc<Link>) -> Option<Box<dyn Editor>
                     if speed > 0.0 { format!("could run {speed:.1}x real time{late}") } else { format!("starting{late}") }
                 };
                 bar.label(status);
-                bar.with_layout(egui::Layout::right_to_left(egui::Align::Center), |r| {
-                    if r.button("About").clicked() { ui.about = !ui.about; }
-                    // fixed sizes, always reachable (unlike the corner of a window grown off screen)
-                    // sizes take effect when the window opens again: hosts don't reliably follow
-                    // a plugin window resizing itself while open
-                    r.menu_button("Size", |m| {
-                        let now = editor_state.size().0;
-                        for (label, scale) in [("75%", 0.75f32), ("90%", 0.9), ("100%", 1.0), ("110%", 1.1), ("125%", 1.25)] {
-                            let w = 980.0 * scale;
-                            let mark = if (now as f32 - w).abs() < 2.0 { "  \u{2713}" } else { "" };
-                            if m.button(format!("{label}{mark}")).clicked() {
-                                editor_state.set_size((w as u32, (w / PANEL_RATIO + BAR_H) as u32));
-                                ui.size_note = (w as u32) != now;
-                                m.close_menu();
-                            }
-                        }
-                    });
-                    if ui.size_note {
-                        r.colored_label(egui::Color32::from_rgb(0xff, 0x8a, 0x1f), "Close and reopen the window to apply the new size");
-                    }
-                });
+                if ui.size_note {
+                    bar.colored_label(egui::Color32::from_rgb(0xff, 0x8a, 0x1f), "Close and reopen the window to apply the new size");
+                }
             });
         });
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(egui::Color32::from_rgb(0x24, 0x22, 0x20))).show_inside(rw, |c| {
